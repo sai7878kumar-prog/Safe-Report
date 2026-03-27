@@ -6,7 +6,4 @@
   "routes": [
     { "src": "/(.*)", "dest": "app.py" }
   ],
-  "config": {
-    "includeFiles": ["app/**"]
-  }
 }
