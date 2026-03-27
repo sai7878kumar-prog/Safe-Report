@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from datetime import datetime
 
 from flask import Flask, redirect, render_template, request, url_for
@@ -77,13 +78,24 @@ def register_routes(app: Flask) -> None:
         chat_text = "\n".join(chat_messages)
 
         # Save evidence snapshot as a simple text file (simulation of real-world reporting).
-        evidence_dir = os.path.join(os.path.dirname(__file__), "..", "evidence")
-        os.makedirs(evidence_dir, exist_ok=True)
+        # On Vercel the repo filesystem may be read-only; use a writable temp dir.
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         evidence_filename = f"chat_{timestamp}.txt"
-        evidence_path = os.path.join(evidence_dir, evidence_filename)
-        with open(evidence_path, "w", encoding="utf-8") as f:
-            f.write(chat_text)
+        evidence_path = ""
+
+        is_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+        if is_vercel:
+            evidence_dir = os.path.join(tempfile.gettempdir(), "safe_report_evidence")
+        else:
+            evidence_dir = os.path.join(os.path.dirname(__file__), "..", "evidence")
+
+        try:
+            os.makedirs(evidence_dir, exist_ok=True)
+            evidence_path = os.path.join(evidence_dir, evidence_filename)
+            with open(evidence_path, "w", encoding="utf-8") as f:
+                f.write(chat_text)
+        except OSError:
+            evidence_filename = ""
         save_report(
             app.config["DATABASE"],
             chat_text,
