@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SafeReport - Analysis Result</title>
+    <style>
+        :root {
+            --bg: #0b1020;
+            --panel: #11182c;
+            --text: #e6edf7;
+            --muted: #94a3b8;
+            --line: #26324f;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: radial-gradient(circle at top, #111934, var(--bg));
+            color: var(--text);
+            font-family: "Segoe UI", Arial, sans-serif;
+            min-height: 100vh;
+            padding: 24px;
+        }
+        .wrap {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(17, 24, 44, 0.95);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: 0 20px 45px rgba(0,0,0,.4);
+        }
+        .top { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; align-items: center; }
+        .badge {
+            font-size: 13px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+        .High { background: rgba(239,68,68,.15); color: #fca5a5; border-color: rgba(239,68,68,.35); }
+        .Medium { background: rgba(251,146,60,.15); color: #fdba74; border-color: rgba(251,146,60,.35); }
+        .Low { background: rgba(34,197,94,.15); color: #86efac; border-color: rgba(34,197,94,.35); }
+        .Normal { background: rgba(148,163,184,.15); color: #cbd5e1; border-color: rgba(148,163,184,.35); }
+        .panel { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #0f172a; }
+        .line {
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
+        .line:last-child { margin-bottom: 0; }
+        .meta { color: var(--muted); font-size: 13px; }
+        .btns { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .meter-wrap { margin-top: 10px; background: #020617; border-radius: 999px; border: 1px solid var(--line); padding: 4px; }
+        .meter-bar { height: 10px; border-radius: 999px; background: linear-gradient(90deg, #22c55e, #eab308, #ef4444); width: 0%; transition: width .5s ease; }
+        a {
+            text-decoration: none;
+            padding: 10px 14px;
+            border-radius: 10px;
+            color: white;
+            background: #2563eb;
+            transition: transform .15s ease;
+        }
+        a:hover { transform: translateY(-1px); }
+        a.secondary { background: #334155; }
+        a.danger { background: #dc2626; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="top">
+            <h1>Chat Analysis Result</h1>
+            <div class="badge {{ severity }}">Severity: {{ severity }} ({{ confidence }}%)</div>
+        </div>
+        <div style="margin-top: 10px;" class="meta">
+            Risk Score: <strong>{{ risk_score }}%</strong> ({{ risk_label }})
+        </div>
+        <div class="meter-wrap">
+            <div class="meter-bar" id="risk-meter" style="width: {{ risk_score }}%;"></div>
+        </div>
+
+        {% if evidence_filename %}
+        <div class="panel" style="margin-top: 14px;">
+            <strong>Evidence Snapshot</strong>
+            <div class="meta" style="margin-top: 6px;">
+                Chat transcript saved as: <code>{{ evidence_filename }}</code> (for reporting / police use).
+            </div>
+        </div>
+        {% endif %}
+        <div style="margin-top: 12px;" class="panel">
+            <strong>Recommended Actions</strong>
+            <div style="margin-top: 8px;" class="meta">
+                {{ suggestion }}
+            </div>
+            <div style="margin-top: 10px;">
+                {% if severity == "High" %}
+                <div>✔ Block User</div>
+                <div>✔ Report Account</div>
+                <div>✔ Escalate to Authority</div>
+                <div>✔ Save Evidence</div>
+                {% elif severity == "Medium" %}
+                <div>✔ Block User</div>
+                <div>✔ Report Account</div>
+                {% elif severity == "Low" %}
+                <div>✔ Ignore / Mute</div>
+                <div>✔ Report if it continues</div>
+                {% else %}
+                <div>✔ No immediate action needed</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="panel" style="margin-top: 14px;">
+            <strong>Why this result?</strong>
+            <div class="meta" style="margin-top: 6px;">
+                The model looked at each message, detected patterns and phrases, and then picked the highest-risk severity.
+            </div>
+            <ul style="margin-top: 8px; padding-left: 18px; font-size: 13px;">
+                {% for item in line_results %}
+                    {% if item["severity"] != "Normal" %}
+                    <li>
+                        "{{ item["text"] }}" &rarr;
+                        <strong>{{ item["severity"] }}</strong>
+                        {% if item["highlights"] %}
+                        (matched: {% for h in item["highlights"] %}<span style="color:#e0f2fe;font-weight:600;">{{ h }}</span>{% if not loop.last %}, {% endif %}{% endfor %})
+                        {% endif %}
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                {% if not detected_phrases and not line_results %}
+                <li>No risky language was detected.</li>
+                {% endif %}
+            </ul>
+        </div>
+
+        {% if detected_phrases %}
+        <div class="panel" style="margin-top: 14px;">
+            <strong>
+                {% if severity == "High" %}Detected Threatening Language
+                {% elif severity == "Medium" %}Detected Abusive Language
+                {% elif severity == "Low" %}Detected Offensive Language
+                {% else %}Detected Language
+                {% endif %}
+            </strong>
+            <div class="meta" style="margin-top: 6px;">
+                The following phrases/patterns triggered the ML classifier:
+            </div>
+            <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+                {% for p in detected_phrases %}
+                <span class="badge Normal" style="background: rgba(59,130,246,.12); color: #bfdbfe; border-color: rgba(59,130,246,.25);">
+                    {{ p }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if line_results %}
+        <div class="panel">
+            <strong>Line-by-line detection</strong>
+            <div class="meta">Each message is scored independently using the ML classifier.</div>
+            <div style="margin-top: 10px;">
+                {% for item in line_results %}
+                <div class="line">
+                    <div>{{ loop.index }}. "{{ item["text"] }}"</div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <div class="badge {{ item['severity'] }}">
+                            {% if item["severity"] == "High" %}🔴 {% endif %}
+                            {% if item["severity"] == "Medium" %}🟠 {% endif %}
+                            {% if item["severity"] == "Low" %}🟢 {% endif %}
+                            {% if item["severity"] == "Normal" %}⚪ {% endif %}
+                            {{ item["severity"] }} - {{ item["confidence"] }}%
+                        </div>
+                    </div>
+                </div>
+                {% if item["highlights"] %}
+                <div class="meta" style="margin-top: -6px; margin-bottom: 10px; padding-left: 2px;">
+                    Matched: {% for h in item["highlights"] %}<span style="color: #e0f2fe; font-weight: 600;">{{ h }}</span>{% if not loop.last %}, {% endif %}{% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="btns">
+            <a href="/chat">Back to Chat</a>
+            <a class="secondary" href="/admin">Admin Panel</a>
+            {% if severity == "High" %}
+            <a class="danger" href="/escalate">Escalate</a>
+            {% endif %}
+        </div>
+
+        {% if severity == "High" %}
+        <div class="panel" style="margin-top: 14px; border-color:#b91c1c;">
+            <strong>User Safety Mode</strong>
+            <div class="meta" style="margin-top: 6px;">
+                You might be in danger. Consider taking one of the following safety actions immediately (simulated):
+            </div>
+            <div class="btns" style="margin-top: 10px;">
+                <a class="danger" href="/escalate">Block &amp; Report (Simulated)</a>
+                <a class="secondary" href="#">Call Help (Simulated)</a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
